@@ -4,5 +4,7 @@ pragma solidity ^0.8.18;
 import {IStrategy} from "@tokenized-strategy/interfaces/IStrategy.sol";
 
 interface IStrategyInterface is IStrategy {
-    //TODO: Add your specific implementation interface in here.
+    function asset() external view returns (address);
+    function balanceOfStake() external view returns (uint256 _amount);
+    function uniFees(address, address) external view returns (uint24 fee);
 }
