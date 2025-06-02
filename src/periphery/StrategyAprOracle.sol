@@ -14,6 +14,7 @@ contract StrategyAprOracle is AprOracleBase {
     address constant UNISWAP_V3_ROUTER = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
     address constant REWARD_TOKEN = 0x44108f0223A3C3028F5Fe7AEC7f9bb2E66beF82F;
     uint256 constant YEAR = 31536000;
+    uint256 constant WEEK = 604800;
 
     constructor() AprOracleBase("Across Lender APR Oracle", msg.sender) {}
 
@@ -65,8 +66,9 @@ contract StrategyAprOracle is AprOracleBase {
     }
 
     function getRewarderAPR(address _strategy, address _asset, int256 _delta) public view returns (uint256) {
-        uint256 yearOfEmissions;
-        uint256 cumulativeBalance;
+        uint256 weekOfEmissions;
+        uint256 depositedBalance;
+        uint256 totalStaked;
         {
             (address lp,,,,,) = IHubPool(HUB_ADDRESS).pooledTokens(_asset);
             (
@@ -74,22 +76,24 @@ contract StrategyAprOracle is AprOracleBase {
                 uint256 baseEmissionRate, //uint256 lastUpdateTime
                 , //uint256 maxMultiplier
                 , //uint256 secondsToMaxMultiplier
-                uint256 cumulativeStaked, //uint256 rewardPerTokenStored
+                uint256 _staked, //uint256 rewardPerTokenStored
                 ,
             ) = IStaking(STAKING_ADDRESS).stakingTokens(lp);
-            (cumulativeBalance,,,) = IStaking(STAKING_ADDRESS).getUserStake(lp, _strategy);
-            if (_delta < 0 && cumulativeBalance < uint256(-_delta)) {
-                cumulativeBalance = 0;
+
+            (depositedBalance,,,) = IStaking(STAKING_ADDRESS).getUserStake(lp, _strategy);
+            if (_delta < 0 && depositedBalance < uint256(-_delta)) {
+                totalStaked = _staked - depositedBalance;
             } else {
                 if (_delta >= 0) {
-                    cumulativeBalance = cumulativeBalance + uint256(_delta);
+                    totalStaked = _staked + uint256(_delta);
                 } else {
-                    cumulativeBalance = cumulativeBalance - uint256(-_delta);
+                    totalStaked = _staked - uint256(-_delta);
                 }
             }
 
-            yearOfEmissions = (baseEmissionRate * YEAR * 1e18 * cumulativeBalance) / cumulativeStaked;
+            weekOfEmissions = baseEmissionRate * WEEK;
         }
+
         uint256 _output = UniswapV3SwapSimulator.simulateExactInputSingle(
             ISwapRouter(UNISWAP_V3_ROUTER),
             ISwapRouter.ExactInputSingleParams({
@@ -98,12 +102,11 @@ contract StrategyAprOracle is AprOracleBase {
                 fee: IStrategyInterface(_strategy).uniFees(REWARD_TOKEN, _asset),
                 recipient: address(0),
                 deadline: block.timestamp,
-                amountIn: yearOfEmissions,
+                amountIn: weekOfEmissions,
                 amountOutMinimum: 0,
                 sqrtPriceLimitX96: 0
             })
         );
-
-        return (1e18 * _output) / cumulativeBalance;
+        return ((1e18 * _output * 52) / totalStaked);
     }
 }
