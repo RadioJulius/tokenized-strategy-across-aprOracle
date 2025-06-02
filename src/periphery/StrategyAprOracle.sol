@@ -5,6 +5,7 @@ import {AprOracleBase} from "@periphery/AprOracle/AprOracleBase.sol";
 import {IHubPool} from "../interfaces/IHubPool.sol";
 import {IStaking} from "../interfaces/IStaking.sol";
 import {IStrategyInterface} from "../interfaces/IStrategyInterface.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {UniswapV3SwapSimulator, ISwapRouter} from "../libraries/UniswapV3SwapSimulator.sol";
 
@@ -45,8 +46,7 @@ contract StrategyAprOracle is AprOracleBase {
     }
 
     function getHubPoolBaseAPR(address _asset, int256 _delta) public view returns (uint256) {
-        (,,, int256 utilizedReserves, uint256 liquidReserves, uint256 undistributedLpFees) =
-            IHubPool(HUB_ADDRESS).pooledTokens(_asset);
+        (int256 utilizedReserves, uint256 liquidReserves, uint256 undistributedLpFees) = getHubLpInfo(_asset);
 
         require(utilizedReserves >= 0, "utilizedReserves must be non-negative");
         uint256 totalReserves = liquidReserves + uint256(utilizedReserves);
@@ -69,6 +69,7 @@ contract StrategyAprOracle is AprOracleBase {
         uint256 weekOfEmissions;
         uint256 depositedBalance;
         uint256 totalStaked;
+        uint256 exchangeRate = getCalculatedExchangeRate(_asset);
         {
             (address lp,,,,,) = IHubPool(HUB_ADDRESS).pooledTokens(_asset);
             (
@@ -81,6 +82,8 @@ contract StrategyAprOracle is AprOracleBase {
             ) = IStaking(STAKING_ADDRESS).stakingTokens(lp);
 
             (depositedBalance,,,) = IStaking(STAKING_ADDRESS).getUserStake(lp, _strategy);
+            depositedBalance = (depositedBalance * exchangeRate) / 1e18;
+            _staked = (_staked * exchangeRate) / 1e18;
             if (_delta < 0 && depositedBalance < uint256(-_delta)) {
                 totalStaked = _staked - depositedBalance;
             } else {
@@ -108,5 +111,22 @@ contract StrategyAprOracle is AprOracleBase {
             })
         );
         return ((1e18 * _output * 52) / totalStaked);
+    }
+
+    function getHubLpInfo(address _asset)
+        internal
+        view
+        returns (int256 utilizedReserves, uint256 liquidReserves, uint256 undistributedLpFees)
+    {
+        (,,, utilizedReserves, liquidReserves, undistributedLpFees) = IHubPool(HUB_ADDRESS).pooledTokens(_asset);
+    }
+
+    function getCalculatedExchangeRate(address _asset) public view returns (uint256) {
+        (address lp,,,,,) = IHubPool(HUB_ADDRESS).pooledTokens(_asset);
+        uint256 totalSupply = IERC20(lp).totalSupply();
+        (int256 utilizedReserves, uint256 liquidReserves, uint256 undistributedLpFees) = getHubLpInfo(_asset);
+        int256 numerator = int256(liquidReserves) + utilizedReserves + int256(undistributedLpFees);
+
+        return (uint256(numerator) * 1e18) / totalSupply;
     }
 }
