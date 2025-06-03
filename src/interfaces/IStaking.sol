@@ -1,8 +1,16 @@
+pragma solidity ^0.8.18;
+
 interface IStaking {
     function stake(address stakedToken, uint256 amount) external;
+
     function unstake(address stakedToken, uint256 amount) external;
+
     function withdrawReward(address stakedToken) external;
-    function getUserStake(address stakedToken, address account)
+
+    function getUserStake(
+        address stakedToken,
+        address account
+    )
         external
         view
         returns (
@@ -11,8 +19,15 @@ interface IStaking {
             uint256 rewardsAccumulatedPerToken,
             uint256 rewardsOutstanding
         );
-    function getOutstandingRewards(address stakedToken, address account) external view returns (uint256);
-    function stakingTokens(address stakedToken)
+
+    function getOutstandingRewards(
+        address stakedToken,
+        address account
+    ) external view returns (uint256);
+
+    function stakingTokens(
+        address stakedToken
+    )
         external
         view
         returns (

@@ -23,7 +23,10 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 contract Strategy is BaseStrategy {
     using SafeERC20 for ERC20;
 
-    constructor(address _asset, string memory _name) BaseStrategy(_asset, _name) {}
+    constructor(
+        address _asset,
+        string memory _name
+    ) BaseStrategy(_asset, _name) {}
 
     /*//////////////////////////////////////////////////////////////
                 NEEDED TO BE OVERRIDDEN BY STRATEGIST
@@ -95,7 +98,11 @@ contract Strategy is BaseStrategy {
      * @return _totalAssets A trusted and accurate account for the total
      * amount of 'asset' the strategy currently holds including idle funds.
      */
-    function _harvestAndReport() internal override returns (uint256 _totalAssets) {
+    function _harvestAndReport()
+        internal
+        override
+        returns (uint256 _totalAssets)
+    {
         // TODO: Implement harvesting logic and accurate accounting EX:
         //
         //      if(!TokenizedStrategy.isShutdown()) {
@@ -128,7 +135,9 @@ contract Strategy is BaseStrategy {
      * @param . The address that is withdrawing from the strategy.
      * @return . The available amount that can be withdrawn in terms of `asset`
      */
-    function availableWithdrawLimit(address /*_owner*/ ) public view override returns (uint256) {
+    function availableWithdrawLimit(
+        address /*_owner*/
+    ) public view override returns (uint256) {
         // NOTE: Withdraw limitations such as liquidity constraints should be accounted for HERE
         //  rather than _freeFunds in order to not count them as losses on withdraws.
 

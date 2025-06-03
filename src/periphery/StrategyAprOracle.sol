@@ -11,8 +11,10 @@ import {UniswapV3SwapSimulator, ISwapRouter} from "../libraries/UniswapV3SwapSim
 
 contract StrategyAprOracle is AprOracleBase {
     address constant HUB_ADDRESS = 0xc186fA914353c44b2E33eBE05f21846F1048bEda;
-    address constant STAKING_ADDRESS = 0x9040e41eF5E8b281535a96D9a48aCb8cfaBD9a48;
-    address constant UNISWAP_V3_ROUTER = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
+    address constant STAKING_ADDRESS =
+        0x9040e41eF5E8b281535a96D9a48aCb8cfaBD9a48;
+    address constant UNISWAP_V3_ROUTER =
+        0xE592427A0AEce92De3Edee1F18E0157C05861564;
     address constant REWARD_TOKEN = 0x44108f0223A3C3028F5Fe7AEC7f9bb2E66beF82F;
     uint256 constant YEAR = 31536000;
     uint256 constant WEEK = 604800;
@@ -38,15 +40,30 @@ contract StrategyAprOracle is AprOracleBase {
      * @param _delta The difference in debt.
      * @return . The expected apr for the strategy represented as 1e18.
      */
-    function aprAfterDebtChange(address _strategy, int256 _delta) external view override returns (uint256) {
-        return (
-            getHubPoolBaseAPR(IStrategyInterface(_strategy).asset(), _delta)
-                + getRewarderAPR(_strategy, IStrategyInterface(_strategy).asset(), _delta)
-        );
+    function aprAfterDebtChange(
+        address _strategy,
+        int256 _delta
+    ) external view override returns (uint256) {
+        return (getHubPoolBaseAPR(
+            IStrategyInterface(_strategy).asset(),
+            _delta
+        ) +
+            getRewarderAPR(
+                _strategy,
+                IStrategyInterface(_strategy).asset(),
+                _delta
+            ));
     }
 
-    function getHubPoolBaseAPR(address _asset, int256 _delta) public view returns (uint256) {
-        (int256 utilizedReserves, uint256 liquidReserves, uint256 undistributedLpFees) = getHubLpInfo(_asset);
+    function getHubPoolBaseAPR(
+        address _asset,
+        int256 _delta
+    ) public view returns (uint256) {
+        (
+            int256 utilizedReserves,
+            uint256 liquidReserves,
+            uint256 undistributedLpFees
+        ) = getHubLpInfo(_asset);
 
         require(utilizedReserves >= 0, "utilizedReserves must be non-negative");
         uint256 totalReserves = liquidReserves + uint256(utilizedReserves);
@@ -60,30 +77,35 @@ contract StrategyAprOracle is AprOracleBase {
             }
         }
         // Undistributed Fees are distributed at the fee rate per second, we extrapolate this for a year
-        uint256 feesPerYear = (undistributedLpFees * IHubPool(HUB_ADDRESS).lpFeeRatePerSecond() * YEAR) / 1e18;
+        uint256 feesPerYear = (undistributedLpFees *
+            IHubPool(HUB_ADDRESS).lpFeeRatePerSecond() *
+            YEAR) / 1e18;
 
         return (1e18 * feesPerYear) / totalReserves;
     }
 
-    function getRewarderAPR(address _strategy, address _asset, int256 _delta) public view returns (uint256) {
+    function getRewarderAPR(
+        address _strategy,
+        address _asset,
+        int256 _delta
+    ) public view returns (uint256) {
         uint256 weekOfEmissions;
         uint256 depositedBalance;
         uint256 totalStaked;
         uint256 exchangeRate = getCalculatedExchangeRate(_asset);
         {
-            (address lp,,,,,) = IHubPool(HUB_ADDRESS).pooledTokens(_asset);
-            (
-                , //bool enabled
-                uint256 baseEmissionRate, //uint256 lastUpdateTime
-                , //uint256 maxMultiplier
-                , //uint256 secondsToMaxMultiplier
-                uint256 _staked, //uint256 rewardPerTokenStored
-                ,
-            ) = IStaking(STAKING_ADDRESS).stakingTokens(lp);
+            (address lp, , , , , ) = IHubPool(HUB_ADDRESS).pooledTokens(_asset);
+            (, uint256 baseEmissionRate, , , uint256 _staked, , ) = IStaking(
+                STAKING_ADDRESS
+            ).stakingTokens(lp);
 
-            (depositedBalance,,,) = IStaking(STAKING_ADDRESS).getUserStake(lp, _strategy);
+            (depositedBalance, , , ) = IStaking(STAKING_ADDRESS).getUserStake(
+                lp,
+                _strategy
+            );
             depositedBalance = (depositedBalance * exchangeRate) / 1e18;
             _staked = (_staked * exchangeRate) / 1e18;
+
             if (_delta < 0 && depositedBalance < uint256(-_delta)) {
                 totalStaked = _staked - depositedBalance;
             } else {
@@ -102,30 +124,54 @@ contract StrategyAprOracle is AprOracleBase {
             ISwapRouter.ExactInputSingleParams({
                 tokenIn: REWARD_TOKEN,
                 tokenOut: _asset,
-                fee: IStrategyInterface(_strategy).uniFees(REWARD_TOKEN, _asset),
+                fee: IStrategyInterface(_strategy).uniFees(
+                    REWARD_TOKEN,
+                    _asset
+                ),
                 recipient: address(0),
                 deadline: block.timestamp,
-                amountIn: weekOfEmissions,
+                amountIn: 1e18,
                 amountOutMinimum: 0,
                 sqrtPriceLimitX96: 0
             })
         );
-        return ((1e18 * _output * 52) / totalStaked);
+        return ((weekOfEmissions * _output * 52) / totalStaked);
     }
 
-    function getHubLpInfo(address _asset)
+    function getHubLpInfo(
+        address _asset
+    )
         internal
         view
-        returns (int256 utilizedReserves, uint256 liquidReserves, uint256 undistributedLpFees)
+        returns (
+            int256 utilizedReserves,
+            uint256 liquidReserves,
+            uint256 undistributedLpFees
+        )
     {
-        (,,, utilizedReserves, liquidReserves, undistributedLpFees) = IHubPool(HUB_ADDRESS).pooledTokens(_asset);
+        (
+            ,
+            ,
+            ,
+            utilizedReserves,
+            liquidReserves,
+            undistributedLpFees
+        ) = IHubPool(HUB_ADDRESS).pooledTokens(_asset);
     }
 
-    function getCalculatedExchangeRate(address _asset) public view returns (uint256) {
-        (address lp,,,,,) = IHubPool(HUB_ADDRESS).pooledTokens(_asset);
+    function getCalculatedExchangeRate(
+        address _asset
+    ) public view returns (uint256) {
+        (address lp, , , , , ) = IHubPool(HUB_ADDRESS).pooledTokens(_asset);
         uint256 totalSupply = IERC20(lp).totalSupply();
-        (int256 utilizedReserves, uint256 liquidReserves, uint256 undistributedLpFees) = getHubLpInfo(_asset);
-        int256 numerator = int256(liquidReserves) + utilizedReserves + int256(undistributedLpFees);
+        (
+            int256 utilizedReserves,
+            uint256 liquidReserves,
+            uint256 undistributedLpFees
+        ) = getHubLpInfo(_asset);
+        int256 numerator = int256(liquidReserves) +
+            utilizedReserves +
+            int256(undistributedLpFees);
 
         return (uint256(numerator) * 1e18) / totalSupply;
     }
