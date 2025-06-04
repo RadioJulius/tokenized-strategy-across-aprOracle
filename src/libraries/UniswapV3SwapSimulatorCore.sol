@@ -57,19 +57,22 @@ library Simulate {
         uint256 feeAmount;
     }
 
-    function simulateSwap(IUniswapV3Pool pool, bool zeroForOne, int256 amountSpecified, uint160 sqrtPriceLimitX96)
-        internal
-        view
-        returns (int256 amount0, int256 amount1)
-    {
+    function simulateSwap(
+        IUniswapV3Pool pool,
+        bool zeroForOne,
+        int256 amountSpecified,
+        uint160 sqrtPriceLimitX96
+    ) internal view returns (int256 amount0, int256 amount1) {
         require(amountSpecified != 0, "AS");
 
-        (uint160 sqrtPriceX96, int24 tick,,,,,) = pool.slot0();
+        (uint160 sqrtPriceX96, int24 tick, , , , , ) = pool.slot0();
 
         require(
             zeroForOne
-                ? sqrtPriceLimitX96 < sqrtPriceX96 && sqrtPriceLimitX96 > TickMath.MIN_SQRT_RATIO
-                : sqrtPriceLimitX96 > sqrtPriceX96 && sqrtPriceLimitX96 < TickMath.MAX_SQRT_RATIO,
+                ? sqrtPriceLimitX96 < sqrtPriceX96 &&
+                    sqrtPriceLimitX96 > TickMath.MIN_SQRT_RATIO
+                : sqrtPriceLimitX96 > sqrtPriceX96 &&
+                    sqrtPriceLimitX96 < TickMath.MAX_SQRT_RATIO,
             "SPL"
         );
 
@@ -91,13 +94,23 @@ library Simulate {
             liquidity: cache.liquidityStart
         });
 
-        while (state.amountSpecifiedRemaining != 0 && state.sqrtPriceX96 != sqrtPriceLimitX96) {
+        while (
+            state.amountSpecifiedRemaining != 0 &&
+            state.sqrtPriceX96 != sqrtPriceLimitX96
+        ) {
             StepComputations memory step;
 
             step.sqrtPriceStartX96 = state.sqrtPriceX96;
 
-            (step.tickNext, step.initialized) =
-                nextInitializedTickWithinOneWord(pool.tickBitmap, state.tick, cache.tickSpacing, zeroForOne);
+            (
+                step.tickNext,
+                step.initialized
+            ) = nextInitializedTickWithinOneWord(
+                pool.tickBitmap,
+                state.tick,
+                cache.tickSpacing,
+                zeroForOne
+            );
 
             if (step.tickNext < TickMath.MIN_TICK) {
                 step.tickNext = TickMath.MIN_TICK;
@@ -107,9 +120,18 @@ library Simulate {
 
             step.sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(step.tickNext);
 
-            (state.sqrtPriceX96, step.amountIn, step.amountOut, step.feeAmount) = SwapMath.computeSwapStep(
+            (
                 state.sqrtPriceX96,
-                (zeroForOne ? step.sqrtPriceNextX96 < sqrtPriceLimitX96 : step.sqrtPriceNextX96 > sqrtPriceLimitX96)
+                step.amountIn,
+                step.amountOut,
+                step.feeAmount
+            ) = SwapMath.computeSwapStep(
+                state.sqrtPriceX96,
+                (
+                    zeroForOne
+                        ? step.sqrtPriceNextX96 < sqrtPriceLimitX96
+                        : step.sqrtPriceNextX96 > sqrtPriceLimitX96
+                )
                     ? sqrtPriceLimitX96
                     : step.sqrtPriceNextX96,
                 state.liquidity,
@@ -119,19 +141,23 @@ library Simulate {
 
             if (exactInput) {
                 unchecked {
-                    state.amountSpecifiedRemaining -= (step.amountIn + step.feeAmount).toInt256();
+                    state.amountSpecifiedRemaining -= (step.amountIn +
+                        step.feeAmount).toInt256();
                 }
                 state.amountCalculated -= step.amountOut.toInt256();
             } else {
                 unchecked {
                     state.amountSpecifiedRemaining += step.amountOut.toInt256();
                 }
-                state.amountCalculated += (step.amountIn + step.feeAmount).toInt256();
+                state.amountCalculated += (step.amountIn + step.feeAmount)
+                    .toInt256();
             }
 
             if (state.sqrtPriceX96 == step.sqrtPriceNextX96) {
                 if (step.initialized) {
-                    (, int128 liquidityNet,,,,,,) = pool.ticks(step.tickNext);
+                    (, int128 liquidityNet, , , , , , ) = pool.ticks(
+                        step.tickNext
+                    );
                     unchecked {
                         if (zeroForOne) liquidityNet = -liquidityNet;
                     }
@@ -151,8 +177,14 @@ library Simulate {
         }
 
         (amount0, amount1) = zeroForOne == exactInput
-            ? (amountSpecified - state.amountSpecifiedRemaining, state.amountCalculated)
-            : (state.amountCalculated, amountSpecified - state.amountSpecifiedRemaining);
+            ? (
+                amountSpecified - state.amountSpecifiedRemaining,
+                state.amountCalculated
+            )
+            : (
+                state.amountCalculated,
+                amountSpecified - state.amountSpecifiedRemaining
+            );
     }
 
     // This function replicates TickBitmap, but accepts a function pointer argument.
@@ -177,11 +209,16 @@ library Simulate {
                 initialized = masked != 0;
                 // overflow/underflow is possible, but prevented externally by limiting both tickSpacing and tick
                 next = initialized
-                    ? (compressed - int24(uint24(bitPos - BitMath.mostSignificantBit(masked)))) * tickSpacing
+                    ? (compressed -
+                        int24(
+                            uint24(bitPos - BitMath.mostSignificantBit(masked))
+                        )) * tickSpacing
                     : (compressed - int24(uint24(bitPos))) * tickSpacing;
             } else {
                 // start from the word of the next tick, since the current tick state doesn't matter
-                (int16 wordPos, uint8 bitPos) = tickBitmapPosition(compressed + 1);
+                (int16 wordPos, uint8 bitPos) = tickBitmapPosition(
+                    compressed + 1
+                );
                 // all the 1s at or to the left of the bitPos
                 uint256 mask = ~((1 << bitPos) - 1);
                 uint256 masked = self(wordPos) & mask;
@@ -190,8 +227,14 @@ library Simulate {
                 initialized = masked != 0;
                 // overflow/underflow is possible, but prevented externally by limiting both tickSpacing and tick
                 next = initialized
-                    ? (compressed + 1 + int24(uint24(BitMath.leastSignificantBit(masked) - bitPos))) * tickSpacing
-                    : (compressed + 1 + int24(uint24(type(uint8).max - bitPos))) * tickSpacing;
+                    ? (compressed +
+                        1 +
+                        int24(
+                            uint24(BitMath.leastSignificantBit(masked) - bitPos)
+                        )) * tickSpacing
+                    : (compressed +
+                        1 +
+                        int24(uint24(type(uint8).max - bitPos))) * tickSpacing;
             }
         }
     }
@@ -200,7 +243,9 @@ library Simulate {
     /// @param tick The tick for which to compute the position
     /// @return wordPos The key in the mapping containing the word in which the bit is stored
     /// @return bitPos The bit position in the word where the flag is stored
-    function tickBitmapPosition(int24 tick) private pure returns (int16 wordPos, uint8 bitPos) {
+    function tickBitmapPosition(
+        int24 tick
+    ) private pure returns (int16 wordPos, uint8 bitPos) {
         unchecked {
             wordPos = int16(tick >> 8);
             bitPos = uint8(int8(tick % 256));

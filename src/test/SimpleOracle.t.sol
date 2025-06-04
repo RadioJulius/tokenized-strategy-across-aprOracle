@@ -19,7 +19,7 @@ contract SimpleOracleTest is Test {
         oracle = new StrategyAprOracle();
     }
 
-    function testSimpleOracleCheck(uint256 _delta) public {
+    function testSimpleOracleCheck() public {
         // Check set up
         // TODO: Add checks for the setup
 
@@ -29,7 +29,14 @@ contract SimpleOracleTest is Test {
         assertGt(currentApr, 0, "ZERO");
         assertLt(currentApr, 1e18, "+100%");
 
-        console2.log("currentAPR: ", currentApr);
+        console2.log("currentAPR:", currentApr);
+
+        // log our sub-sources of APR too
+        uint256 baseAPR = oracle.getHubPoolBaseAPR(asset, 0);
+        console2.log("Base APR:", baseAPR);
+
+        uint256 rewardsAPR = oracle.getRewarderAPR(address(strategy), asset, 0);
+        console2.log("Rewards APR:", rewardsAPR);
     }
 
     function testSimpleOracleCheckWithDeltaPositive(int256 _delta) public {
@@ -44,7 +51,6 @@ contract SimpleOracleTest is Test {
         console2.log("delta value: ", _delta);
 
         assertLe(newApr, currentApr);
-
     }
 
     function testSimpleOracleCheckWithDeltaNegative(int256 _delta) public {
@@ -61,6 +67,5 @@ contract SimpleOracleTest is Test {
         console2.log("delta value: ", _delta);
 
         assertGe(newApr, currentApr);
-
     }
 }

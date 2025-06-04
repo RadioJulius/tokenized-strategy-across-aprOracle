@@ -1,7 +1,20 @@
+pragma solidity ^0.8.18;
+
 interface IHubPool {
-    function addLiquidity(address l1Token, uint256 l1TokenAmount) external payable;
-    function removeLiquidity(address l1Token, uint256 lpTokenAmount, bool sendEth) external;
-    function pooledTokens(address l1Token)
+    function addLiquidity(
+        address l1Token,
+        uint256 l1TokenAmount
+    ) external payable;
+
+    function removeLiquidity(
+        address l1Token,
+        uint256 lpTokenAmount,
+        bool sendEth
+    ) external;
+
+    function pooledTokens(
+        address l1Token
+    )
         external
         view
         returns (
@@ -12,6 +25,8 @@ interface IHubPool {
             uint256 liquidReserves,
             uint256 undistributedLpFees
         );
+
     function exchangeRateCurrent(address l1Token) external returns (uint256);
+
     function lpFeeRatePerSecond() external view returns (uint256);
 }
